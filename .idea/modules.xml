@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/CommanderProto.iml" filepath="$PROJECT_DIR$/CommanderProto.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
+      <module fileurl="file://$PROJECT_DIR$/dronekitStarter.iml" filepath="$PROJECT_DIR$/dronekitStarter.iml" />
     </modules>
   </component>
 </project>
