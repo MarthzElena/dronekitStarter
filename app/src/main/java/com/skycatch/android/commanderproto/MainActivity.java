@@ -5,6 +5,8 @@ import android.content.DialogInterface;
 import android.os.Environment;
 import android.os.Handler;
 import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentTransaction;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
@@ -18,6 +20,7 @@ import android.widget.Spinner;
 import android.widget.Toast;
 
 import com.google.gson.Gson;
+import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.o3dr.android.client.ControlTower;
 import com.o3dr.android.client.Drone;
 import com.o3dr.android.client.DroneApiListener;
@@ -48,7 +51,9 @@ import com.o3dr.services.android.lib.util.ParcelableUtils;
 import com.skycatch.android.commanderproto.data.CommanderMission;
 import com.skycatch.android.commanderproto.data.CommanderWaypoints;
 import com.skycatch.android.commanderproto.data.CommanderZone;
+import com.skycatch.android.commanderproto.fragments.MapboxFragment;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -74,13 +79,17 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
     private CharSequence[] chars;
     private String path = "";
     List<MissionItem> missionItems = new ArrayList<>();
-    List<MissionItem.ComplexItem> complexItemsList = new ArrayList<>();
+    private CommanderMission commanderMission;
+    private List<CommanderZone> zones;
+    List<CommanderZone.ZoneRoutes> routes;
 
     private final Handler handler = new Handler();
     private ControlTower controlTower;
     private Drone drone;
     private int droneType = Type.TYPE_UNKNOWN; //define drone type (copter, plane, rover)
-    MissionApi missionApi;
+    private Mission mission;
+
+    MapboxFragment mapboxFragment;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,7 +101,6 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
         //Initialize service manager
         controlTower = new ControlTower(getApplicationContext());
         drone = new Drone(getApplicationContext());
-        missionApi = new MissionApi();
 
         //Create app folder
         if (!Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
@@ -104,12 +112,24 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
                 boolean create = directory.mkdirs();
                 Toast.makeText(getApplicationContext(), String.valueOf(create), Toast.LENGTH_LONG).show();
             }
-            File[] listFiles = directory.listFiles();
-            chars = new CharSequence[listFiles.length];
-            for (int i=0; i < listFiles.length; i++) {
-                chars[i] = listFiles[i].getName();
+            File[] filesArray = directory.listFiles();
+            List<String> filesList = new ArrayList<>();
+            for (int i=0; i < filesArray.length; i++) {
+                String current = filesArray[i].getName();
+                String[] fileName = current.split("\\.");
+                if (fileName[fileName.length-1].equals("cmdr")) {
+                    filesList.add(current);
+                }
             }
+            chars = new String[filesList.size()];
+            filesList.toArray(chars);
         }
+
+        mapboxFragment = new MapboxFragment();
+        getSupportFragmentManager().popBackStack();
+        FragmentTransaction fm = getSupportFragmentManager().beginTransaction();
+        fm.add(R.id.fragment_container, mapboxFragment).commit();
+
 
         upload.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -161,44 +181,40 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
 
     }
 
-    private final Drone.OnMissionItemsBuiltCallback missionItemBuiltListener = new Drone.OnMissionItemsBuiltCallback() {
-        @Override
-        public void onMissionItemsBuilt(MissionItem.ComplexItem[] complexItems) {
-
-        }
-    };
-
     DialogInterface.OnClickListener dialoglistener = new DialogInterface.OnClickListener() {
         @Override
         public void onClick(DialogInterface dialog, int which) {
+            missionItems = new ArrayList<>();
             String file = getCommanderJsonFile(path + "/" + chars[which]);
             boolean data = getData(file);
             if (data) {
-                if (drone.isConnected()) {
-                    Mission mission = new Mission();
-                    List<CharSequence> charWaypoints = new ArrayList<>();
+                mission = new Mission();
+                List<CharSequence> charWaypoints = new ArrayList<>();
 
-                    for (int i = 0; i < missionItems.size(); i++) {
-                        mission.addMissionItem(missionItems.get(i));
-                        charWaypoints.add("waypoint "+i);
-                    }
+                for (int i = 0; i < missionItems.size(); i++) {
+                    mission.addMissionItem(missionItems.get(i));
+                    charWaypoints.add("waypoint "+i);
+                }
 
-                    MissionApi.setMission(drone, new Mission(), true);
+                setWaypointUI(charWaypoints);
 
-                    ArrayAdapter<CharSequence> waypointAdapter = new ArrayAdapter<CharSequence>(
-                            getApplicationContext(),
-                            R.layout.waypoint_spinner_item, charWaypoints);
-                    waypointAdapter.setDropDownViewResource(R.layout.waypoint_spinner_item);
-                    waypointSpinner.setAdapter(waypointAdapter);
+                //move map to zone
+                if (!zones.isEmpty()) {
+                    LatLng baseCenter = new LatLng(zones.get(0).base.data.geometry.getLat(), zones.get(0).base.data.geometry.getLng());
 
-//                    MissionApi.loadWaypoints(drone);
-                    //drone.setMission(mission, true);
-                } else {
-                    Toast.makeText(getApplicationContext(), R.string.connect_to_vehicle, Toast.LENGTH_LONG).show();
+//                    mapboxFragment.moveMaptoZone(baseCenter);
                 }
             }
         }
     };
+
+    public void setWaypointUI(List<CharSequence> charWaypoints){
+        ArrayAdapter<CharSequence> waypointAdapter = new ArrayAdapter<CharSequence>(
+                getApplicationContext(),
+                R.layout.waypoint_spinner_item, charWaypoints);
+        waypointAdapter.setDropDownViewResource(R.layout.waypoint_spinner_item);
+        waypointSpinner.setAdapter(waypointAdapter);
+    }
 
     public void setupUI() {
         upload = (Button) findViewById(R.id.upload_btn);
@@ -227,9 +243,13 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
         try {
             JSONObject jsonObjectMission = (new JSONObject(json)).getJSONObject("mission");
             Gson gson = new Gson();
-            CommanderMission commanderMission = gson.fromJson(String.valueOf(jsonObjectMission), CommanderMission.class);
-            List<CommanderZone> zones = Arrays.asList(commanderMission.zones);
-            List<CommanderZone.ZoneRoutes> routes = new ArrayList<>();
+            commanderMission = gson.fromJson(String.valueOf(jsonObjectMission), CommanderMission.class);
+            zones = Arrays.asList(commanderMission.zones);
+            JSONArray coordinates = jsonObjectMission.getJSONArray("zones").getJSONObject(0).getJSONObject("data").getJSONObject("geometry").getJSONArray("coordinates");
+            for (int i = 0; i < coordinates.length(); i++) {
+
+            }
+            routes = new ArrayList<>();
             for (CommanderZone commanderZone : zones) {
                 routes = Arrays.asList(commanderZone.routes);
             }
@@ -243,12 +263,7 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
                     waypoint.setCoordinate(new LatLongAlt(currentWaypoint.data.geometry.getLat(), currentWaypoint.data.geometry.getLng(), currentWaypoint.altitude));
                     missionItems.add(waypoint);
                 }
-//                Survey survey = new Survey();
-//                survey.setPolygonPoints(points);
-//                complexItemsList.add(MissionApi.buildMissionItem(drone, survey));
             }
-//            MissionItem.ComplexItem[] array = complexItemsList.toArray(new MissionItem.ComplexItem[complexItemsList.size()]);
-//            drone.buildMissionItemsAsync(array, missionItemBuiltListener);
 
         } catch (JSONException e) {
             e.printStackTrace();
@@ -325,6 +340,10 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
             ConnectionParameter connectionParameter = new ConnectionParameter(ConnectionType.TYPE_UDP, bundleParams, null);
 
             this.drone.connect(connectionParameter);
+
+            if (mission != null){
+                MissionApi.setMission(drone, new Mission(), true);
+            }
         }
     }
 
