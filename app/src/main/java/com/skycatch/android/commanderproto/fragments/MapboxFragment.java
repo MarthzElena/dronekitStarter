@@ -9,8 +9,8 @@ import android.view.ViewGroup;
 import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.mapbox.mapboxsdk.views.MapView;
 import com.skycatch.android.commanderproto.R;
+import com.skycatch.android.commanderproto.data.CommanderMission;
 import com.skycatch.android.commanderproto.data.CommanderZone;
-import com.skycatch.android.commanderproto.data.CommanderZone.ZonesData.ZoneGeometry;
 
 /**
  * Created by marthaelena on 10/2/15.
@@ -40,7 +40,7 @@ public class MapboxFragment  extends Fragment{
 
     }
 
-    public void drawPolygone(){
+    public void drawMission(CommanderMission mission){
 
     }
 

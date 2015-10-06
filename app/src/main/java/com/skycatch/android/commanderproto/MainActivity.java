@@ -51,6 +51,7 @@ import com.o3dr.services.android.lib.util.ParcelableUtils;
 import com.skycatch.android.commanderproto.data.CommanderMission;
 import com.skycatch.android.commanderproto.data.CommanderWaypoints;
 import com.skycatch.android.commanderproto.data.CommanderZone;
+import com.skycatch.android.commanderproto.data.ObjectConverter;
 import com.skycatch.android.commanderproto.fragments.MapboxFragment;
 
 import org.json.JSONArray;
@@ -186,25 +187,30 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
         public void onClick(DialogInterface dialog, int which) {
             missionItems = new ArrayList<>();
             String file = getCommanderJsonFile(path + "/" + chars[which]);
-            boolean data = getData(file);
-            if (data) {
-                mission = new Mission();
-                List<CharSequence> charWaypoints = new ArrayList<>();
+            commanderMission = ObjectConverter.createObjectConverter(file);
 
-                for (int i = 0; i < missionItems.size(); i++) {
-                    mission.addMissionItem(missionItems.get(i));
-                    charWaypoints.add("waypoint "+i);
-                }
-
-                setWaypointUI(charWaypoints);
-
-                //move map to zone
-                if (!zones.isEmpty()) {
-                    LatLng baseCenter = new LatLng(zones.get(0).base.data.geometry.getLat(), zones.get(0).base.data.geometry.getLng());
-
-//                    mapboxFragment.moveMaptoZone(baseCenter);
-                }
+            if (commanderMission != null) {
+                mapboxFragment.drawMission(commanderMission);
             }
+
+//            if (data) {
+//                mission = new Mission();
+//                List<CharSequence> charWaypoints = new ArrayList<>();
+//
+//                for (int i = 0; i < missionItems.size(); i++) {
+//                    mission.addMissionItem(missionItems.get(i));
+//                    charWaypoints.add("waypoint "+i);
+//                }
+//
+//                setWaypointUI(charWaypoints);
+//
+//                //move map to zone
+//                if (!zones.isEmpty()) {
+//                    LatLng baseCenter = new LatLng(zones.get(0).base.data.geometry.getLat(), zones.get(0).base.data.geometry.getLng());
+//
+////                    mapboxFragment.moveMaptoZone(baseCenter);
+//                }
+//            }
         }
     };
 
@@ -237,39 +243,6 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
             e.printStackTrace();
         }
         return json;
-    }
-
-    public boolean getData(String json) {
-        try {
-            JSONObject jsonObjectMission = (new JSONObject(json)).getJSONObject("mission");
-            Gson gson = new Gson();
-            commanderMission = gson.fromJson(String.valueOf(jsonObjectMission), CommanderMission.class);
-            zones = Arrays.asList(commanderMission.zones);
-            JSONArray coordinates = jsonObjectMission.getJSONArray("zones").getJSONObject(0).getJSONObject("data").getJSONObject("geometry").getJSONArray("coordinates");
-            for (int i = 0; i < coordinates.length(); i++) {
-
-            }
-            routes = new ArrayList<>();
-            for (CommanderZone commanderZone : zones) {
-                routes = Arrays.asList(commanderZone.routes);
-            }
-
-            for (CommanderZone.ZoneRoutes zoneRoutes : routes) {
-                List<LatLong> points = new ArrayList<>();
-                for (int i=0; i < zoneRoutes.waypoints.length; i++) {
-                    CommanderWaypoints currentWaypoint = zoneRoutes.waypoints[i];
-                    points.add(new LatLong(currentWaypoint.data.geometry.getLat(), currentWaypoint.data.geometry.getLng()));
-                    Waypoint waypoint = new Waypoint();
-                    waypoint.setCoordinate(new LatLongAlt(currentWaypoint.data.geometry.getLat(), currentWaypoint.data.geometry.getLng(), currentWaypoint.altitude));
-                    missionItems.add(waypoint);
-                }
-            }
-
-        } catch (JSONException e) {
-            e.printStackTrace();
-            return false;
-        }
-        return true;
     }
 
     @Override
