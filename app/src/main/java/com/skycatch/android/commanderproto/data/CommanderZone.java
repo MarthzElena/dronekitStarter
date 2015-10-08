@@ -1,8 +1,11 @@
 package com.skycatch.android.commanderproto.data;
 
+import android.graphics.Color;
+
 import com.cocoahero.android.geojson.Feature;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,26 +34,19 @@ public class CommanderZone {
         public String type;
         public String zoneId;
         public double altitude;
-        public WaypointData data;
+        public Feature data;
     }
-//
-//    public static class ZonesData {
-//        public String type;
-//        public ZoneProperties properties;
-//        public ZoneGeometry geometry;
-//
-//        public static class ZoneProperties {
-//            public ZoneStyle style;
-//        }
-//
-//        public static class ZoneStyle {
-//            public String color;
-//        }
-//
-//        public static class ZoneGeometry {
-//            public List<double[]> coordinate2D; //coordinates: [ [lng, lat], [lng, lat], [lng, lat] ]
-//            public String type;
-//        }
-//    }
+
+    public int getColorProperty(){
+        int color;
+        try {
+            color = Color.parseColor(data.getProperties().getJSONObject("style").getString("color"));
+        } catch (JSONException e) {
+            e.printStackTrace();
+            //set default color to black if something goes wrong
+            color = Color.BLACK;
+        }
+        return color;
+    }
 
 }

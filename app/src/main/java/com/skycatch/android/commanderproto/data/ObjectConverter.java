@@ -23,8 +23,8 @@ public class ObjectConverter {
 
 
     /**
-    * As method handles JSONObjects returns true if conversion went smoothly
-     * returns false if JSONException occured
+    * This methods create the converted object as it handles JSONObject
+     * returns the converted object if everything went smooth and null if exception occurred
     */
     public static CommanderMission createObjectConverter(String missionJSON) {
         CommanderMission commanderMission = null;
@@ -51,6 +51,18 @@ public class ObjectConverter {
                         JSONObject currentWaypoint = jsonWaypoints.getJSONObject(k);
                         commanderMission.zones[i].routes[j].waypoints[k].data = new Feature(currentWaypoint.getJSONObject("data"));
                     }
+                }
+
+                //set the base of the zone
+                commanderMission.zones[i].base.data = new Feature(currentZone.getJSONObject("base").getJSONObject("data"));
+            }
+
+            // Check for obstacles in the mission
+            JSONArray jsonObstacles = jsonMission.getJSONArray("obstacles");
+            if (jsonObstacles.length() != 0) {
+                for (int i = 0; i < jsonObstacles.length(); i++) {
+                    JSONObject currentObstacle = jsonObstacles.getJSONObject(i);
+                    commanderMission.obstacles[i].data = new Feature(currentObstacle.getJSONObject("data"));
                 }
             }
 

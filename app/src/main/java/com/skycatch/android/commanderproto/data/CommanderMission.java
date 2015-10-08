@@ -10,7 +10,7 @@ public class CommanderMission {
     public String id;
     public String name;
     public CommanderZone[] zones;
-    //public CommanderObstacle[] obstacles;
+    public CommanderObstacle[] obstacles;
     public CommanderMissionLocation location;
     public String resolution;
     public double altAboveGrnd;
