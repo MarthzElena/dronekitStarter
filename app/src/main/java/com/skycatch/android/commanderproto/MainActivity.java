@@ -5,9 +5,7 @@ import android.content.DialogInterface;
 import android.os.Environment;
 import android.os.Handler;
 import android.support.v4.app.FragmentActivity;
-import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Menu;
@@ -19,70 +17,56 @@ import android.widget.Button;
 import android.widget.Spinner;
 import android.widget.Toast;
 
-import com.google.gson.Gson;
-import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.o3dr.android.client.ControlTower;
 import com.o3dr.android.client.Drone;
-import com.o3dr.android.client.DroneApiListener;
 import com.o3dr.android.client.apis.drone.DroneStateApi;
 import com.o3dr.android.client.apis.mission.MissionApi;
 import com.o3dr.android.client.apis.drone.GuidedApi;
 import com.o3dr.android.client.interfaces.DroneListener;
 import com.o3dr.android.client.interfaces.TowerListener;
 import com.o3dr.services.android.lib.coordinate.LatLong;
-import com.o3dr.services.android.lib.coordinate.LatLongAlt;
 import com.o3dr.services.android.lib.drone.attribute.AttributeEvent;
+import com.o3dr.services.android.lib.drone.attribute.AttributeEventExtra;
 import com.o3dr.services.android.lib.drone.attribute.AttributeType;
 import com.o3dr.services.android.lib.drone.connection.ConnectionParameter;
 import com.o3dr.services.android.lib.drone.connection.ConnectionResult;
 import com.o3dr.services.android.lib.drone.connection.ConnectionType;
 import com.o3dr.services.android.lib.drone.mission.Mission;
-import com.o3dr.services.android.lib.drone.mission.MissionItemType;
 import com.o3dr.services.android.lib.drone.mission.item.MissionItem;
-import com.o3dr.services.android.lib.drone.mission.item.complex.StructureScanner;
-import com.o3dr.services.android.lib.drone.mission.item.complex.Survey;
-import com.o3dr.services.android.lib.drone.mission.item.spatial.BaseSpatialItem;
-import com.o3dr.services.android.lib.drone.mission.item.spatial.SplineWaypoint;
-import com.o3dr.services.android.lib.drone.mission.item.spatial.Waypoint;
+import com.o3dr.services.android.lib.drone.property.Gps;
 import com.o3dr.services.android.lib.drone.property.Type;
 import com.o3dr.services.android.lib.drone.property.VehicleMode;
-import com.o3dr.services.android.lib.model.action.Action;
-import com.o3dr.services.android.lib.util.ParcelableUtils;
 import com.skycatch.android.commanderproto.data.CommanderMission;
-import com.skycatch.android.commanderproto.data.CommanderWaypoints;
 import com.skycatch.android.commanderproto.data.CommanderZone;
 import com.skycatch.android.commanderproto.data.ObjectConverter;
 import com.skycatch.android.commanderproto.fragments.MapboxFragment;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class MainActivity extends FragmentActivity implements TowerListener, DroneListener{
 
-    private Button upload;
+    final static int MODE_STABILIZE = 0;
+    final static int MODE_GUIDED = 1;
+    final static int MODE_AUTO = 2;
+    final static int MODE_LAND = 3;
+    final static String GROUND_COLLITION_IMMINENT = "com.o3dr.android.client.Drone.ACTION_GROUND_COLLISION_IMMINENT";
+
+    private Button importMission;
     private Button connect;
-    private Button modeGuided;
-    private Button modeAuto;
-    private Spinner waypointSpinner;
+    private Button uploadMission;
+    private Button arm;
+    private Button takeOff;
+    private Spinner modesDropdown;
 
     private CharSequence[] chars;
     private String path = "";
-    List<MissionItem> missionItems = new ArrayList<>();
     private CommanderMission commanderMission;
-    private List<CommanderZone> zones;
-    List<CommanderZone.ZoneRoutes> routes;
 
     private final Handler handler = new Handler();
     private ControlTower controlTower;
@@ -132,7 +116,7 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
         fm.add(R.id.fragment_container, mapboxFragment).commit();
 
 
-        upload.setOnClickListener(new View.OnClickListener() {
+        importMission.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 AlertDialog.Builder dialog = new AlertDialog.Builder(MainActivity.this);
@@ -152,40 +136,79 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
             }
         });
 
-        waypointSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                Waypoint selected = (Waypoint) missionItems.get(position);
-                LatLong latLong = new LatLong(selected.getCoordinate().getLatitude(), selected.getCoordinate().getLongitude());
-                GuidedApi.sendGuidedPoint(drone, latLong, true);
-            }
+        modesDropdown.setOnItemSelectedListener(modesSelector);
 
+        uploadMission.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onNothingSelected(AdapterView<?> parent) {
+            public void onClick(View v) {
+                if (drone.isConnected()) {
+                    Mission mission = new Mission();
+
+                    for (MissionItem item : commanderMission.missionItems) {
+                        mission.addMissionItem(item);
+                    }
+                    MissionApi.setMission(drone, mission, true);
+
+                } else {
+                    Toast.makeText(getApplicationContext(), R.string.connect_to_vehicle, Toast.LENGTH_LONG).show();
+                }
             }
         });
 
-        modeGuided.setOnClickListener(new View.OnClickListener() {
+        arm.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                DroneStateApi.setVehicleMode(drone, VehicleMode.COPTER_GUIDED);
-                GuidedApi.setGuidedAltitude(drone, 40.0);
+                drone.arm(true);
             }
         });
 
-        modeAuto.setOnClickListener(new View.OnClickListener() {
+        takeOff.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                DroneStateApi.setVehicleMode(drone, VehicleMode.COPTER_AUTO);
+                if (drone.isConnected()) {
+                    if (((Button) v).getText().equals("Take off")) {
+                        GuidedApi.takeoff(drone, commanderMission.altAboveGrnd);
+                        takeOff.setText("Land");
+                        Toast.makeText(getApplicationContext(), "Taking off", Toast.LENGTH_SHORT).show();
+                    } else {
+                        DroneStateApi.setVehicleMode(drone, VehicleMode.COPTER_LAND);
+                        takeOff.setText("Take off");
+                    }
+                } else {
+                    Toast.makeText(getApplicationContext(), R.string.connect_to_vehicle, Toast.LENGTH_LONG).show();
+                }
             }
         });
 
     }
 
+    AdapterView.OnItemSelectedListener modesSelector = new AdapterView.OnItemSelectedListener() {
+        @Override
+        public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+            switch (position) {
+                case MODE_STABILIZE:
+                    DroneStateApi.setVehicleMode(drone, VehicleMode.COPTER_STABILIZE);
+                    Toast.makeText(getApplicationContext(), "Mode STABILIZE", Toast.LENGTH_LONG).show();
+                    break;
+                case MODE_GUIDED:
+                    DroneStateApi.setVehicleMode(drone, VehicleMode.COPTER_GUIDED);
+                    GuidedApi.setGuidedAltitude(drone, commanderMission.altAboveGrnd);
+                    Toast.makeText(getApplicationContext(), "Mode GUIDED", Toast.LENGTH_LONG).show();
+                    break;
+                case MODE_AUTO:
+                    DroneStateApi.setVehicleMode(drone, VehicleMode.COPTER_AUTO);
+                    Toast.makeText(getApplicationContext(), "Mode AUTO", Toast.LENGTH_LONG).show();
+                    break;
+            }
+        }
+
+        @Override
+        public void onNothingSelected(AdapterView<?> parent) { }
+    };
+
     DialogInterface.OnClickListener dialoglistener = new DialogInterface.OnClickListener() {
         @Override
         public void onClick(DialogInterface dialog, int which) {
-            missionItems = new ArrayList<>();
             String file = getCommanderJsonFile(path + "/" + chars[which]);
             commanderMission = ObjectConverter.createObjectConverter(file);
 
@@ -193,41 +216,20 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
                 mapboxFragment.drawMission(commanderMission);
             }
 
-//            if (data) {
-//                mission = new Mission();
-//                List<CharSequence> charWaypoints = new ArrayList<>();
-//
-//                for (int i = 0; i < missionItems.size(); i++) {
-//                    mission.addMissionItem(missionItems.get(i));
-//                    charWaypoints.add("waypoint "+i);
-//                }
-//
-//                setWaypointUI(charWaypoints);
-//
-//                //move map to zone
-//                if (!zones.isEmpty()) {
-//                    LatLng baseCenter = new LatLng(zones.get(0).base.data.geometry.getLat(), zones.get(0).base.data.geometry.getLng());
-//
-////                    mapboxFragment.moveMaptoZone(baseCenter);
-//                }
-//            }
         }
     };
 
-    public void setWaypointUI(List<CharSequence> charWaypoints){
-        ArrayAdapter<CharSequence> waypointAdapter = new ArrayAdapter<CharSequence>(
-                getApplicationContext(),
-                R.layout.waypoint_spinner_item, charWaypoints);
-        waypointAdapter.setDropDownViewResource(R.layout.waypoint_spinner_item);
-        waypointSpinner.setAdapter(waypointAdapter);
-    }
-
     public void setupUI() {
-        upload = (Button) findViewById(R.id.upload_btn);
+        importMission = (Button) findViewById(R.id.upload_btn);
         connect = (Button) findViewById(R.id.connect_btn);
-        modeGuided = (Button) findViewById(R.id.guided_mode);
-        modeAuto = (Button) findViewById(R.id.auto_mode);
-        waypointSpinner = (Spinner) findViewById(R.id.waypoint_dropdown);
+        uploadMission = (Button) findViewById(R.id.upload_mission);
+        arm = (Button) findViewById(R.id.arm_btn);
+        takeOff = (Button) findViewById(R.id.take_off);
+
+        modesDropdown = (Spinner) findViewById(R.id.mode_dropdown);
+        ArrayAdapter<CharSequence> modesAdapter = ArrayAdapter.createFromResource(this, R.array.modes_array, R.layout.waypoint_spinner_item);
+        modesAdapter.setDropDownViewResource(R.layout.waypoint_spinner_item);
+        modesDropdown.setAdapter(modesAdapter);
     }
 
     public String getCommanderJsonFile(String filename) {
@@ -332,14 +334,22 @@ public class MainActivity extends FragmentActivity implements TowerListener, Dro
         switch (s) {
             case AttributeEvent.STATE_CONNECTED:
                 updateButton(true);
+                mapboxFragment.setUAVmarker(((Gps)drone.getAttribute(AttributeType.GPS)).getPosition());
                 break;
             case AttributeEvent.STATE_DISCONNECTED:
                 updateButton(false);
                 break;
-            case AttributeEvent.STATE_ARMING:
-                Toast.makeText(getApplicationContext(), "ARMING!!", Toast.LENGTH_LONG).show();
+            case AttributeEvent.GPS_POSITION:
+                Gps dronePosition = drone.getAttribute(AttributeType.GPS);
+                LatLong currentPosition = dronePosition.getPosition();
+                mapboxFragment.moveUAVmarker(currentPosition);
                 break;
-            default:
+            case GROUND_COLLITION_IMMINENT:
+                boolean groundCollition = bundle.getBoolean("extra_is_ground_collision_imminent");
+                break;
+            case AttributeEvent.AUTOPILOT_MESSAGE:
+                String message = bundle.getString(AttributeEventExtra.EXTRA_AUTOPILOT_MESSAGE);
+                Toast.makeText(getApplicationContext(), message, Toast.LENGTH_SHORT).show();
                 break;
         }
     }

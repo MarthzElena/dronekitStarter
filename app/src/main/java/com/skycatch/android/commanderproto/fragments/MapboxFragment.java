@@ -23,6 +23,7 @@ import com.mapbox.mapboxsdk.geometry.LatLng;
 import com.mapbox.mapboxsdk.overlay.Marker;
 import com.mapbox.mapboxsdk.overlay.PathOverlay;
 import com.mapbox.mapboxsdk.views.MapView;
+import com.o3dr.services.android.lib.coordinate.LatLong;
 import com.skycatch.android.commanderproto.R;
 import com.skycatch.android.commanderproto.data.CommanderMission;
 import com.skycatch.android.commanderproto.data.CommanderObstacle;
@@ -37,6 +38,7 @@ import java.util.List;
 public class MapboxFragment  extends Fragment{
 
     private MapView mapView;
+    private Marker uav;
 
     public MapboxFragment() {}
 
@@ -47,7 +49,6 @@ public class MapboxFragment  extends Fragment{
 
         mapView = (MapView) view.findViewById(R.id.mapbox_view);
         mapView.setZoom(1);
-
 
         return view;
     }
@@ -199,6 +200,23 @@ public class MapboxFragment  extends Fragment{
             return new LayerDrawable(new Drawable[]{markerImage, new BitmapDrawable(canvasBitmap)});
         } else {
             return null;
+        }
+    }
+
+    public void setUAVmarker(LatLong position) {
+        if (position != null) {
+            uav = new Marker("", "", new LatLng(position.getLatitude(), position.getLongitude()));
+            uav.setMarker(getResources().getDrawable(R.drawable.uav));
+            mapView.addMarker(uav);
+        }
+    }
+
+    public void moveUAVmarker(LatLong newPosition) {
+        if (newPosition != null) {
+            mapView.removeMarker(uav);
+            uav = new Marker("", "", new LatLng(newPosition.getLatitude(), newPosition.getLongitude()));
+            uav.setMarker(getResources().getDrawable(R.drawable.uav));
+            mapView.addMarker(uav);
         }
     }
 
