@@ -1,7 +1,10 @@
 package com.skycatch.android.commanderproto.data;
 
 import com.cocoahero.android.geojson.Feature;
+import com.cocoahero.android.geojson.Point;
 import com.google.gson.Gson;
+import com.o3dr.services.android.lib.coordinate.LatLongAlt;
+import com.o3dr.services.android.lib.drone.mission.item.spatial.Waypoint;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -36,6 +39,7 @@ public class ObjectConverter {
 
             Gson gson = new Gson();
             commanderMission = gson.fromJson(String.valueOf(jsonMission), CommanderMission.class);
+            commanderMission.missionItems = new ArrayList<>();
 
             JSONArray JSONzonesData = jsonMission.getJSONArray("zones");
             for (int i = 0; i < JSONzonesData.length(); i++) {
@@ -50,6 +54,11 @@ public class ObjectConverter {
                     for (int k = 0; k < jsonWaypoints.length(); k++) {
                         JSONObject currentWaypoint = jsonWaypoints.getJSONObject(k);
                         commanderMission.zones[i].routes[j].waypoints[k].data = new Feature(currentWaypoint.getJSONObject("data"));
+
+                        Point waypointPoint = (Point) commanderMission.zones[i].routes[j].waypoints[k].data.getGeometry();
+                        Waypoint waypoint = new Waypoint();
+                        waypoint.setCoordinate(new LatLongAlt(waypointPoint.getPosition().getLatitude(), waypointPoint.getPosition().getLongitude(), commanderMission.altAboveGrnd));
+                        commanderMission.missionItems.add(waypoint);
                     }
                 }
 
