@@ -216,6 +216,7 @@ public class MapboxFragment  extends Fragment{
             mapView.removeMarker(uav);
             uav = new Marker("", "", new LatLng(newPosition.getLatitude(), newPosition.getLongitude()));
             uav.setMarker(getResources().getDrawable(R.drawable.uav));
+            uav.setAnchor(new PointF(0.5f, 0.5f));
             mapView.addMarker(uav);
         }
     }
